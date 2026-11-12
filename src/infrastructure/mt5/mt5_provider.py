@@ -109,21 +109,34 @@ class MockMT5MarketDataProvider:
         base_price = _BASE_PRICES.get(info.name, 50.0)
         end_bar_time = (self.BASE_ANCHOR_TIME // step) * step
 
-        # Different symbols get different deterministic trend profiles
+        # Different symbols get different deterministic phase offsets and drift profiles
+        phase_map = {"PETR4": 0.0, "VALE3": 2.1, "WIN$N": 0.9, "EURUSD": 4.2}
+        phase = phase_map.get(info.name, 0.0)
         drift_sign = -1.0 if info.name == "VALE3" else 1.0
         unit = info.tick_size if info.tick_size > 0 else info.point
+
+        def _price_at_offset(off: int) -> float:
+            seq = ((end_bar_time + off * step) // step) % 10000
+            major_cycle = math.sin(seq * 0.14 + phase) * (unit * 28.0)
+            medium_swing = math.cos(seq * 0.37 + phase * 1.5) * (unit * 12.0)
+            micro_noise = math.sin(seq * 1.15 + phase) * (unit * 4.0)
+            drift = drift_sign * (100 + off) * (unit * 0.25)
+            return round(
+                base_price + drift + major_cycle + medium_swing + micro_noise,
+                info.digits,
+            )
 
         candles: list[Candle] = []
         for idx in range(count):
             offset = idx - (count - 1)  # ..., -2, -1, 0 (0 is always end_bar_time)
             bar_time = end_bar_time + offset * step
-            bar_seq = (bar_time // step) % 1000
-            wave = math.sin(bar_seq * 0.35) * (unit * 4)
-            drift = drift_sign * (50 + offset) * (unit * 1.5)
-            close_p = round(base_price + drift + wave, info.digits)
-            open_p = round(close_p - drift_sign * unit, info.digits)
-            high_p = round(max(open_p, close_p) + unit * 3, info.digits)
-            low_p = round(min(open_p, close_p) - unit * 3, info.digits)
+            bar_seq = (bar_time // step) % 10000
+
+            open_p = _price_at_offset(offset - 1)
+            close_p = _price_at_offset(offset)
+            wick_mult = 2 + (bar_seq % 4)
+            high_p = round(max(open_p, close_p) + unit * wick_mult, info.digits)
+            low_p = round(min(open_p, close_p) - unit * wick_mult, info.digits)
 
             candles.append(
                 Candle(
@@ -134,9 +147,9 @@ class MockMT5MarketDataProvider:
                     high=high_p,
                     low=low_p,
                     close=close_p,
-                    tick_volume=1200 + (bar_seq * 37) % 800,
+                    tick_volume=1200 + (bar_seq * 37) % 1400,
                     spread=info.spread,
-                    real_volume=50000 + (bar_seq * 1500) % 45000,
+                    real_volume=50000 + (bar_seq * 1500) % 85000,
                 )
             )
         return candles

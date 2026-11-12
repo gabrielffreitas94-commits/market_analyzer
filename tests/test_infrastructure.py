@@ -112,3 +112,26 @@ def test_mock_mt5_provider_returns_deterministic_mt5_structures():
     assert candles_30[-1] == candles_10[-1]
     assert tick.last == candles_30[-1].close
 
+
+def test_mock_mt5_provider_generates_multi_regime_cycles_for_backtesting():
+    from src.domain.services import MarketAnalyzerService
+
+    provider = MockMT5MarketDataProvider()
+    for sym in ("PETR4", "VALE3", "WIN$N", "EURUSD"):
+        candles = provider.get_candles(sym, Timeframe.M15, count=200)
+        assert len(candles) == 200
+
+        trends_seen = set()
+        rsi_values = []
+        for end_idx in range(30, 200, 5):
+            window = candles[end_idx - 30 : end_idx]
+            analysis = MarketAnalyzerService.analyze(sym, Timeframe.M15, window, None)
+            trends_seen.add(analysis.trend)
+            rsi_values.append(analysis.rsi_14)
+
+        assert TrendSignal.BULLISH in trends_seen
+        assert TrendSignal.BEARISH in trends_seen
+        assert min(rsi_values) < 40.0
+        assert max(rsi_values) > 60.0
+
+
