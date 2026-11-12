@@ -115,9 +115,11 @@ class MockMT5MarketDataProvider:
 
         candles: list[Candle] = []
         for idx in range(count):
-            bar_time = end_bar_time - (count - 1 - idx) * step
-            wave = math.sin(idx * 0.35) * (unit * 4)
-            drift = drift_sign * idx * (unit * 1.5)
+            offset = idx - (count - 1)  # ..., -2, -1, 0 (0 is always end_bar_time)
+            bar_time = end_bar_time + offset * step
+            bar_seq = (bar_time // step) % 1000
+            wave = math.sin(bar_seq * 0.35) * (unit * 4)
+            drift = drift_sign * (50 + offset) * (unit * 1.5)
             close_p = round(base_price + drift + wave, info.digits)
             open_p = round(close_p - drift_sign * unit, info.digits)
             high_p = round(max(open_p, close_p) + unit * 3, info.digits)
@@ -132,9 +134,9 @@ class MockMT5MarketDataProvider:
                     high=high_p,
                     low=low_p,
                     close=close_p,
-                    tick_volume=1200 + (idx * 37) % 800,
+                    tick_volume=1200 + (bar_seq * 37) % 800,
                     spread=info.spread,
-                    real_volume=50000 + (idx * 1500),
+                    real_volume=50000 + (bar_seq * 1500) % 45000,
                 )
             )
         return candles

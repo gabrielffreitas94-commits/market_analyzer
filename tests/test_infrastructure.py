@@ -101,9 +101,14 @@ def test_mock_mt5_provider_returns_deterministic_mt5_structures():
     provider = MockMT5MarketDataProvider()
     info = provider.get_symbol_info("PETR4")
     tick = provider.get_last_tick("PETR4")
-    candles = provider.get_candles("PETR4", Timeframe.M15, count=30)
+    candles_30 = provider.get_candles("PETR4", Timeframe.M15, count=30)
+    candles_10 = provider.get_candles("PETR4", Timeframe.M15, count=10)
 
     assert info is not None and info.name == "PETR4"
     assert tick is not None and tick.ask >= tick.bid
-    assert len(candles) == 30
-    assert candles[0].time < candles[-1].time
+    assert len(candles_30) == 30
+    assert candles_30[0].time < candles_30[-1].time
+    # The last candle must be identical regardless of how many historical bars were requested
+    assert candles_30[-1] == candles_10[-1]
+    assert tick.last == candles_30[-1].close
+
